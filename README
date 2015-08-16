@@ -1,0 +1,52 @@
+This is a series of files to accompany my talk, 
+"Ship It! Containerizing your KDC", presented at the
+2015 AFS and Kerberos Best Practices Workshop in 
+Pittsburgh, PA. 
+
+Docker Containers:
+ krb-client
+ kdc
+ kdc-admin
+
+ A set of Dockerfiles for building sample containers. Based
+ on Debian Jessie, they simply install krb5-user, krb5-kdc
+ and krb5-admin-server respectively.
+
+Docker Compose Test Cluster
+ kdc-cluster
+
+ A docker compose file that starts two kdcs, a master and a
+ slave, and runs sidekick processes in each to run kadmind
+ and kpropd respectively. A krb-client container is started
+ for convenience, running a bogus process, mostly so
+ the nsenter command can be used to enter the container
+ (see https://github.com/jpetazzo/nsenter for details).
+ Finally, tonistiigi/dnsdock:latest is started to fake
+ DNS for the test cluster, borrowing heavily from the ideas
+ in http://sgillis.github.io/posts/2015-03-23-docker-dns.html
+
+ As a note, dnsdock presumes that you want some suffix
+ for dns (defaulting to ".docker"), with the rest being
+  <container_name>.<image_name>
+ This works well for normal Docker usage, but is a bit tricky
+ for us. You can override this, hence the DNSDOCK_NAME and 
+ DNSDOCK_IMAGE environment variables. One more pain point,
+ however, when you do a PTR lookup on a container address,
+ dnsdock returns two entries (using our example for kdc0):
+  w.x.y.z IN PTR  krb.example.com.
+  w.x.y.z IN PTR  kdc0.krb.example.com.
+ This causes no end of trouble with kpropd, because it tries
+ to do DNS canonicalization by default. To work around this,
+ 'rdns = false' is set in the '[libdefaults]' section of
+ the common krb5.conf.
+
+ Persistent files can be found under the 'state' directory,
+ and should be self explanatory. I've used .gitignore to
+ ignore the .../var/lib/krb5kdc directories because I didn't
+ want to stash the several megabyte kdb files in the git
+ repo, but if you're curious, the stash files think the
+ master K/M password is 'foobar'.
+
+Thomas Kula <kula@birchbox.com>
+16 August 2015
+

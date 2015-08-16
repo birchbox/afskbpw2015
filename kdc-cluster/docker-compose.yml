@@ -1,0 +1,90 @@
+# Copyright (C) 2015 Birchbox Inc
+# # See LICENSE for details
+
+
+# This part cheerfully borrowed from http://sgillis.github.io/posts/2015-03-23-docker-dns.html
+dns0:
+  image: tonistiigi/dnsdock:latest
+  hostname: dns0.example.com
+  container_name: dns0
+  volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+  ports:
+    - "172.17.42.1:53:53/udp"
+  command: "-domain='example.com'"
+
+kdc0:
+  image: afskbpw2015/kdc-admin
+  hostname: kdc0.krb.example.com
+  container_name: kdc0
+  entrypoint:
+    - '/usr/sbin/krb5kdc'
+    - '-n'
+  links:
+    - dns0:dns0.example.com
+  dns: 172.17.42.1
+  environment:
+    - DNSDOCK_NAME=kdc0
+    - DNSDOCK_IMAGE=krb
+  volumes:
+    - /home/kula/afskbpw2015/kdc-cluster/state/common/krb5.conf:/etc/krb5.conf:ro
+    - /home/kula/afskbpw2015/kdc-cluster/state/kdc0/etc/krb5.keytab:/etc/krb5.keytab
+    - /home/kula/afskbpw2015/kdc-cluster/state/kdc0/etc/krb5kdc:/etc/krb5kdc
+    - /home/kula/afskbpw2015/kdc-cluster/state/kdc0/var/lib/krb5kdc:/var/lib/krb5kdc
+
+kdc0-kadmin:
+  image: afskbpw2015/kdc-admin
+  container_name: kdc0-kadmin
+  entrypoint:
+    - '/usr/sbin/kadmind'
+    - '-nofork'
+  volumes_from:
+    - kdc0
+  net: 'container:kdc0'
+
+kdc1:
+  image: afskbpw2015/kdc
+  hostname: kdc1.krb.example.com
+  container_name: kdc1
+  entrypoint:
+    - '/usr/sbin/krb5kdc'
+    - '-n'
+  links:
+    - dns0:dns0.example.com
+  dns: 172.17.42.1
+  environment:
+    - DNSDOCK_NAME=kdc1
+    - DNSDOCK_IMAGE=krb
+  volumes:
+    - /home/kula/afskbpw2015/kdc-cluster/state/common/krb5.conf:/etc/krb5.conf:ro
+    - /home/kula/afskbpw2015/kdc-cluster/state/kdc1/etc/krb5.keytab:/etc/krb5.keytab
+    - /home/kula/afskbpw2015/kdc-cluster/state/kdc1/etc/krb5kdc:/etc/krb5kdc
+    - /home/kula/afskbpw2015/kdc-cluster/state/kdc1/var/lib/krb5kdc:/var/lib/krb5kdc
+
+kdc1-kpropd:
+  image: afskbpw2015/kdc-admin
+  container_name: kdc1-kpropd
+  entrypoint:
+    - '/usr/sbin/kpropd'
+    - '-d'
+  volumes_from:
+    - kdc1
+  net: 'container:kdc1'
+
+client:
+  image: afskbpw2015/krb-client
+  hostname: client.team.example.com
+  container_name: krb-client
+  entrypoint:
+    - /bin/sleep
+    - 5d
+  links:
+    - dns0:dns0.example.com
+  dns: 172.17.42.1
+  environment:
+    - DNSDOCK_NAME=client
+    - DNSDOCK_IMAGE=team
+  volumes:
+    - /home/kula/afskbpw2015/kdc-cluster/state/common/krb5.conf:/etc/krb5.conf:ro
+  user: kula
+
